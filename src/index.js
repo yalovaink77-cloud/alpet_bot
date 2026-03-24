@@ -17,6 +17,7 @@ const marketReactionAnalyzer = require('./analyzers/marketReactionAnalyzer');
 const decisionEngine = require('./analyzers/decisionEngine');
 const riskGuard = require('./risk/riskGuard');
 const orderManager = require('./execution/orderManager');
+const telegram = require('./utils/telegramNotifier');
 
 let isRunning = false;
 
@@ -114,6 +115,10 @@ async function processItem(item) {
       portfolioCrowdingPenalty: penaltyFlags.portfolioCrowdingPenalty,
       explanation: riskAdjustedSignal.explanation
     });
+
+    if (riskAdjustedSignal.decision === 'EXECUTE') {
+      telegram.notifySignal(riskAdjustedSignal, normalizedEvent);
+    }
 
     if (riskAdjustedSignal.decision === 'EXECUTE' && riskAdjustedSignal.risk.allClear) {
       const execution = await orderManager.placeSignalOrder(riskAdjustedSignal);
