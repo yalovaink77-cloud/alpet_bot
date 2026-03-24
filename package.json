@@ -1,0 +1,26 @@
+{
+  "name": "alpet-bot",
+  "version": "0.1.0",
+  "description": "Global news to Turkey market impact engine for BIST, VIOP, and MT5 instruments.",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "lint": "node -e \"console.log('No linter configured yet')\"",
+    "check": "node -e \"require('./src/index'); console.log('Bootstrap OK')\"",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@supabase/supabase-js": "^2.49.0",
+    "axios": "^1.7.9",
+    "cheerio": "^1.0.0-rc.12",
+    "dotenv": "^16.4.5",
+    "md5": "^2.3.0",
+    "node-cron": "^3.0.3",
+    "rss-parser": "^3.13.0",
+    "winston": "^3.15.0",
+    "zod": "^3.24.1"
+  }
+}
