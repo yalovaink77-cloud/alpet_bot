@@ -4,6 +4,10 @@ const logger = require('./logger');
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
+// Aynı instrument+direction için 1 cycle (5 dk) cooldown — cycle içi spam önleme
+const COOLDOWN_MS = 5 * 60 * 1000;
+const lastSent = {}; // key: "INSTRUMENT|DIRECTION" → timestamp
+
 function send(text) {
   if (!TOKEN || !CHAT_ID) return;
 
@@ -22,6 +26,17 @@ function send(text) {
 }
 
 function notifySignal(signal, event) {
+  const key = `${signal.instrument}|${signal.direction}`;
+  const now = Date.now();
+
+  if (lastSent[key] && now - lastSent[key] < COOLDOWN_MS) {
+    const kalan = Math.round((COOLDOWN_MS - (now - lastSent[key])) / 60000);
+    logger.info(`Telegram cooldown: ${key} (${kalan} dk sonra tekrar gönderilebilir)`);
+    return;
+  }
+
+  lastSent[key] = now;
+
   const icon = signal.direction === 'LONG' ? '🟢' : signal.direction === 'SHORT' ? '🔴' : '🟡';
   const text = `${icon} <b>ALPET SİNYAL</b>
 
