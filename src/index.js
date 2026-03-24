@@ -11,6 +11,7 @@ const globalNewsCollector = require('./collectors/globalNewsCollector');
 const cryptoNewsCollector = require('./collectors/cryptoNewsCollector');
 const macroCalendarCollector = require('./collectors/macroCalendarCollector');
 const tcmbCollector = require('./collectors/tcmbCollector');
+const commodityNewsCollector = require('./collectors/commodityNewsCollector');
 const eventNormalizer = require('./analyzers/eventNormalizer');
 const historicalEventMatcher = require('./analyzers/historicalEventMatcher');
 const marketReactionAnalyzer = require('./analyzers/marketReactionAnalyzer');
@@ -22,16 +23,17 @@ const telegram = require('./utils/telegramNotifier');
 let isRunning = false;
 
 async function collectNews() {
-  const [localNews, disclosures, globalNews, cryptoNews, macroNews, tcmbNews] = await Promise.all([
+  const [localNews, disclosures, globalNews, cryptoNews, macroNews, tcmbNews, commodityNews] = await Promise.all([
     localNewsCollector.fetchAll(),
     companyDisclosureCollector.fetchAll(),
     globalNewsCollector.fetchAll(),
     cryptoNewsCollector.fetchAll(),
     macroCalendarCollector.fetchAll(),
-    tcmbCollector.fetchAll()
+    tcmbCollector.fetchAll(),
+    commodityNewsCollector.fetchAll()
   ]);
 
-  return [...localNews, ...disclosures, ...globalNews, ...cryptoNews, ...macroNews, ...tcmbNews];
+  return [...localNews, ...disclosures, ...globalNews, ...cryptoNews, ...macroNews, ...tcmbNews, ...commodityNews];
 }
 
 async function processItem(item) {

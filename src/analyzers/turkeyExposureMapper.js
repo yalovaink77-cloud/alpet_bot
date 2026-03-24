@@ -14,6 +14,13 @@ function mapChannelsToInstruments(event) {
     instruments.add('KOZAL');
   }
 
+  if (channels.includes('inflation_risk')) {
+    instruments.add('BRENT');
+    instruments.add('TUPRS');
+    instruments.add('THYAO');
+    instruments.add('PGSUS');
+  }
+
   if (channels.includes('usdtry_up') || channels.includes('usdtry_move')) {
     instruments.add('USDTRY');
     instruments.add('GARAN');
