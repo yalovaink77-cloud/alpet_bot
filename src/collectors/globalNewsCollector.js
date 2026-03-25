@@ -47,22 +47,30 @@ async function fetchAll() {
 
     logger.info(`GlobalNewsCollector: ${data.length} haber Supabase'den çekildi`);
 
-    return data.map(row => ({
-      sourceType:       'supabase',
-      sourceName:       row.source || 'Unknown',
-      externalId:       String(row.id),
-      title:            row.title || '',
-      summary:          row.content || row.title || '',
-      url:              row.url || '',
-      publishedAt:      row.published_at || new Date().toISOString(),
-      reliabilityScore: toReliabilityScore(row.source, row.source_weight),
-      credibility:      'high',
-      // NEWS_FEEDER_BOT'un analiz alanlarını aktarıyoruz
-      category:         row.category || 'general',
-      eventType:        row.event_type || 'news',
-      keywords:         row.keywords || [],
-      affectedAssets:   row.affected_assets || [],
-      language:         row.language || 'tr',
+    const { extractEventEntities } = require('../utils/eventExtractor');
+    return Promise.all(data.map(async row => {
+      const newsText = `${row.title || ''} ${row.content || ''}`;
+      const extraction = await extractEventEntities(newsText);
+      return {
+        sourceType:       'supabase',
+        sourceName:       row.source || 'Unknown',
+        externalId:       String(row.id),
+        title:            row.title || '',
+        summary:          row.content || row.title || '',
+        url:              row.url || '',
+        publishedAt:      row.published_at || new Date().toISOString(),
+        reliabilityScore: toReliabilityScore(row.source, row.source_weight),
+        credibility:      'high',
+        category:         row.category || 'general',
+        eventType:        extraction?.eventType || row.event_type || 'news',
+        keywords:         row.keywords || [],
+        affectedAssets:   row.affected_assets || [],
+        language:         row.language || 'tr',
+        actors:           extraction?.actors || [],
+        eventStage:       extraction?.stage || null,
+        eventContext:     extraction?.context || {},
+        eventMagnitude:   extraction?.magnitude || null
+      };
     }));
   } catch (err) {
     logger.warn('GlobalNewsCollector: Beklenmeyen hata', { error: err.message });

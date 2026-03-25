@@ -3,27 +3,45 @@ const { validateSignal } = require('../utils/schemaValidator');
 const { APP_CONFIG } = require('../../config/app');
 
 function chooseDirection(event, instrument) {
+  // Extraction pipeline'dan gelen eventType, actors, stage, context ile senaryo tabanlı yön
   const ch = event.channels || [];
+  const eventType = event.eventType || '';
+  const actors = event.actors || [];
+  const stage = event.eventStage || event.stage || '';
 
+  // Savaş senaryosu
+  if (eventType === 'war') {
+    if (stage === 'initial' && ['BRENT', 'XAUUSD'].includes(instrument)) return 'LONG';
+    if (stage === 'initial' && ['BIST30', 'VIOP30'].includes(instrument)) return 'SHORT';
+    if (stage === 'ceasefire') return 'CLOSE';
+    if (stage === 'escalation' && ['BRENT', 'XAUUSD'].includes(instrument)) return 'LONG';
+    if (stage === 'escalation' && ['BIST30', 'VIOP30'].includes(instrument)) return 'SHORT';
+    if (stage === 'victory' && actors.includes('USA')) return 'LONG';
+    if (stage === 'victory' && actors.includes('Iran')) return 'SHORT';
+  }
+  // Deprem senaryosu
+  if (eventType === 'earthquake') {
+    if (event.eventMagnitude && event.eventMagnitude >= 7) {
+      if (['insurance'].includes(instrument)) return 'SHORT';
+      if (['construction'].includes(instrument)) return 'LONG';
+      if (['BIST30', 'VIOP30'].includes(instrument)) return 'SHORT';
+    }
+  }
+  // Diğer klasik kurallar (eski mantık)
   // Altın haberleri
   if (ch.includes('gold_up') && ['XAUUSD', 'KOZAL'].includes(instrument)) return 'LONG';
-
   // Petrol haberleri
-  if (ch.includes('oil_up') && ['BRENT', 'TUPRS'].includes(instrument)) return 'LONG';  // Tüpraş yüksek petrolden kazanır
-  if (ch.includes('oil_up') && ['THYAO', 'PGSUS'].includes(instrument)) return 'SHORT'; // Havacılık yakıt maliyeti artar
-
+  if (ch.includes('oil_up') && ['BRENT', 'TUPRS'].includes(instrument)) return 'LONG';
+  if (ch.includes('oil_up') && ['THYAO', 'PGSUS'].includes(instrument)) return 'SHORT';
   // Enflasyon riski
   if (ch.includes('inflation_risk') && ['BRENT', 'TUPRS'].includes(instrument)) return 'LONG';
   if (ch.includes('inflation_risk') && ['THYAO', 'PGSUS'].includes(instrument)) return 'SHORT';
-
   // Döviz hareketleri
   if ((ch.includes('usdtry_up') || ch.includes('usdtry_move')) && instrument === 'USDTRY') return 'LONG';
-  if ((ch.includes('usdtry_up') || ch.includes('usdtry_move')) && ['GARAN', 'AKBNK'].includes(instrument)) return 'SHORT'; // TL krizi → bankalar düşer
-
+  if ((ch.includes('usdtry_up') || ch.includes('usdtry_move')) && ['GARAN', 'AKBNK'].includes(instrument)) return 'SHORT';
   // Risk-off / piyasa düşüşü
   if ((ch.includes('risk_off') || ch.includes('risk_repricing')) && instrument === 'VIOP30') return 'SHORT';
   if ((ch.includes('risk_off') || ch.includes('risk_repricing')) && ['GARAN', 'AKBNK'].includes(instrument)) return 'SHORT';
-
   return 'WATCH';
 }
 

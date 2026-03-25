@@ -1,5 +1,15 @@
-function scoreEvent(event, stats, matchCount) {
-  const sourceScore = Math.min(event.metadata.reliabilityScore || 0, 15);
+
+function scoreEvent(event, matchCount, stats) {
+  // Defensive defaults
+  event = event || {};
+  event.metadata = event.metadata || {};
+  event.candidateInstruments = Array.isArray(event.candidateInstruments) ? event.candidateInstruments : [];
+  matchCount = typeof matchCount === 'number' && !isNaN(matchCount) ? matchCount : 0;
+  stats = stats || {};
+  stats.consistencyScore = typeof stats.consistencyScore === 'number' && !isNaN(stats.consistencyScore) ? stats.consistencyScore : 0;
+  stats.instrument = typeof stats.instrument === 'string' ? stats.instrument : '';
+
+  const sourceScore = Math.min((event.metadata?.reliabilityScore) || 0, 15);
   const credibilityScore = event.credibility === 'high' ? 10 : event.credibility === 'medium' ? 6 : 2;
   const noveltyScore = event.novelty === 'new_information' ? 15 : event.novelty === 'developing_story' ? 8 : 2;
   const severityScore = event.severity === 'extreme' ? 15 : event.severity === 'high' ? 12 : event.severity === 'medium' ? 8 : 4;
