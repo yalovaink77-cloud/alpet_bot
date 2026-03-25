@@ -29,6 +29,8 @@ function mapChannelsToInstruments(event) {
 
   if (channels.includes('risk_off') || channels.includes('risk_repricing')) {
     instruments.add('VIOP30');
+    instruments.add('GARAN');
+    instruments.add('AKBNK');
   }
 
   if (channels.includes('company_specific') && /thyao/i.test(event.title)) {

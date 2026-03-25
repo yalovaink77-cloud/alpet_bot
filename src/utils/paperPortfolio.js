@@ -103,6 +103,9 @@ async function checkAndClosePositions() {
     const entry = parseFloat(pos.entry_price);
     const pricePct = (currentPrice - entry) / entry;
 
+    // WATCH yönü belirsiz pozisyonlar hesaplanamaz, atla
+    if (pos.direction === 'WATCH' || pos.direction === 'NONE') continue;
+
     // LONG: fiyat arttıysa kâr, düştüyse zarar
     // SHORT: fiyat düştüyse kâr, arttıysa zarar
     const pnlPct = pos.direction === 'LONG' ? pricePct : -pricePct;
