@@ -19,6 +19,7 @@ const decisionEngine = require('./analyzers/decisionEngine');
 const riskGuard = require('./risk/riskGuard');
 const orderManager = require('./execution/orderManager');
 const telegram = require('./utils/telegramNotifier');
+const paperPortfolio = require('./utils/paperPortfolio');
 
 let isRunning = false;
 
@@ -119,7 +120,10 @@ async function processItem(item) {
     });
 
     if (riskAdjustedSignal.decision === 'EXECUTE') {
-      telegram.notifySignal(riskAdjustedSignal, normalizedEvent);
+      // Paper trade aç
+      const paperResult = await paperPortfolio.openPosition(riskAdjustedSignal);
+      const account = await paperPortfolio.getAccountSummary();
+      telegram.notifySignal(riskAdjustedSignal, normalizedEvent, paperResult, account);
     }
 
     if (riskAdjustedSignal.decision === 'EXECUTE' && riskAdjustedSignal.risk.allClear) {
@@ -168,6 +172,13 @@ async function runCycle() {
         liveTradingEnabled: APP_CONFIG.execution.liveTradingEnabled
       }
     });
+
+    // Açık pozisyonları kontrol et (TP/SL)
+    const closedPositions = await paperPortfolio.checkAndClosePositions();
+    for (const pos of closedPositions) {
+      const account = await paperPortfolio.getAccountSummary();
+      telegram.notifyPositionClose(pos, account);
+    }
 
     const items = await collectNews();
     const freshItems = deduplicator.filter(items);

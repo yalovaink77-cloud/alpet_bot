@@ -25,7 +25,7 @@ function send(text) {
   req.end();
 }
 
-function notifySignal(signal, event) {
+function notifySignal(signal, event, paperResult, account) {
   const key = `${signal.instrument}|${signal.direction}`;
   const now = Date.now();
 
@@ -38,16 +38,47 @@ function notifySignal(signal, event) {
   lastSent[key] = now;
 
   const icon = signal.direction === 'LONG' ? '🟢' : signal.direction === 'SHORT' ? '🔴' : '🟡';
+
+  let paperLine = '';
+  if (paperResult && paperResult.entryPrice) {
+    paperLine = `\n💼 Paper: $${paperResult.positionUsd} @ ${paperResult.entryPrice}`;
+  }
+
+  let balanceLine = '';
+  if (account) {
+    balanceLine = `\n💰 Bakiye: <b>$${account.balance_usd}</b> | ${account.total_trades} işlem | %${account.winRate} kazanma`;
+  }
+
   const text = `${icon} <b>ALPET SİNYAL</b>
 
 📌 <b>${signal.instrument}</b> — ${signal.direction || '—'}
 ⚡ Karar: <b>${signal.decision}</b>
 📊 Skor: <b>${signal.finalScore}/100</b>
 📰 Kaynak: ${event.sourceName}
-🏷 Olay: ${event.eventType}
+🏷 Olay: ${event.eventType}${paperLine}${balanceLine}
 🕐 ${new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })}`;
 
   send(text);
 }
 
-module.exports = { send, notifySignal };
+function notifyPositionClose(pos, account) {
+  const icon = pos.pnlUsd >= 0 ? '✅' : '❌';
+  const reasonTr = pos.closeReason === 'TAKE_PROFIT' ? 'KÂR AL' : 'ZARAR DURDUR';
+
+  let balanceLine = '';
+  if (account) {
+    balanceLine = `\n💰 Bakiye: <b>$${account.balance_usd}</b> | ${account.total_trades} işlem | %${account.winRate} kazanma`;
+  }
+
+  const text = `${icon} <b>POZİSYON KAPANDI</b> — ${reasonTr}
+
+📌 <b>${pos.instrument}</b> ${pos.direction}
+📥 Giriş: ${parseFloat(pos.entry_price).toFixed(4)}
+📤 Çıkış: ${parseFloat(pos.exitPrice).toFixed(4)}
+💵 P&L: <b>${pos.pnlUsd >= 0 ? '+' : ''}$${pos.pnlUsd}</b>${balanceLine}
+🕐 ${new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })}`;
+
+  send(text);
+}
+
+module.exports = { send, notifySignal, notifyPositionClose };
