@@ -82,7 +82,14 @@ async function openPosition(signal) {
     return null;
   }
 
-  logger.info(`paperPortfolio: AÇILDI ${signal.instrument} ${signal.direction} @ ${entryPrice} ($${positionUsd})`);
+  // Bakiyeden düş (pozisyon sermayeyi bloke eder)
+  const newBalance = parseFloat((account.balance_usd - positionUsd).toFixed(2));
+  await sb.from('paper_account').update({
+    balance_usd: newBalance,
+    updated_at:  new Date().toISOString()
+  }).eq('id', 1);
+
+  logger.info(`paperPortfolio: AÇILDI ${signal.instrument} ${signal.direction} @ ${entryPrice} ($${positionUsd}) | Bakiye: $${newBalance}`);
   return { position, entryPrice, positionUsd };
 }
 
