@@ -164,6 +164,87 @@ class SupabaseClient {
     return this.insert('event_outcomes', record);
   }
 
+  /**
+   * Returns event_signals created between (now - maxAgeMinutes) and (now - minAgeMinutes)
+   * that do NOT yet have a corresponding outcome for the given horizon.
+   * Used by the outcome labeler to know which signals still need resolution.
+   */
+  async listSignalsForLabeling({ minAgeMinutes, maxAgeMinutes, horizon }) {
+    if (!this.enabled) return [];
+
+    const now = new Date();
+    const from = new Date(now - maxAgeMinutes * 60 * 1000).toISOString();
+    const to   = new Date(now - minAgeMinutes * 60 * 1000).toISOString();
+
+    // Signals created in the target window
+    const { data: signals, error: sigErr } = await this.client
+      .from('event_signals')
+      .select('id, event_id, instrument, direction, created_at')
+      .gte('created_at', from)
+      .lte('created_at', to);
+
+    if (sigErr) throw sigErr;
+    if (!signals || signals.length === 0) return [];
+
+    // Exclude signals that already have an outcome for this horizon
+    const { data: done, error: doneErr } = await this.client
+      .from('event_outcomes')
+      .select('signal_id')
+      .in('signal_id', signals.map(s => s.id))
+      .eq('outcome_horizon', horizon);
+
+    if (doneErr) throw doneErr;
+
+    const doneIds = new Set((done || []).map(r => r.signal_id));
+    return signals.filter(s => !doneIds.has(s.id));
+  }
+
+  /**
+   * Returns aggregated outcome stats (hit-rate, avg realized_move, consistency)
+   * for a given event_type + instrument combination.
+   * Used by historicalEventMatcher to build reaction_stats.
+   */
+  async listOutcomeStats({ eventType, instrument, horizon = '1h', minSamples = 3 }) {
+    if (!this.enabled) return null;
+
+    // Join via normalized_events to filter by event_type
+    const { data, error } = await this.client
+      .from('event_outcomes')
+      .select(`
+        direction,
+        realized_move,
+        signal_id,
+        normalized_events!event_outcomes_event_id_fkey (event_type)
+      `)
+      .eq('instrument', instrument)
+      .eq('outcome_horizon', horizon)
+      .not('realized_move', 'is', null);
+
+    if (error) throw error;
+    if (!data || data.length === 0) return null;
+
+    // Filter by event_type
+    const rows = data.filter(r => r.normalized_events?.event_type === eventType);
+    if (rows.length < minSamples) return null;
+
+    const correct = rows.filter(r =>
+      (r.direction === 'long'  && r.realized_move > 0) ||
+      (r.direction === 'short' && r.realized_move < 0)
+    ).length;
+
+    const hitRate = correct / rows.length;
+    const avgMove = rows.reduce((s, r) => s + Number(r.realized_move), 0) / rows.length;
+    // consistencyScore: 0–1, matches what confidenceCalibrator.scoreEvent() expects
+    const consistencyScore = hitRate;
+
+    return {
+      samples: rows.length,
+      hitRate: Number(hitRate.toFixed(4)),
+      avgMove: Number(avgMove.toFixed(6)),
+      consistencyScore: Number(consistencyScore.toFixed(4))
+    };
+  }
+
   async saveAccountSnapshot(record) {
     return this.insert('account_state_snapshots', {
       balance: record.balance || null,

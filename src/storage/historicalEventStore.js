@@ -21,6 +21,17 @@ class HistoricalEventStore {
       })
       .slice(0, limit);
   }
+
+  /**
+   * Returns aggregated outcome stats for a given eventType + instrument combo.
+   * Returns null when there is insufficient data (< minSamples).
+   *
+   * Shape: { samples, hitRate, avgMove, consistencyScore }
+   * consistencyScore is in [0, 1] — directly usable by confidenceCalibrator.scoreEvent().
+   */
+  async getOutcomeStats({ eventType, instrument, horizon = '1h', minSamples = 3 }) {
+    return supabaseClient.listOutcomeStats({ eventType, instrument, horizon, minSamples });
+  }
 }
 
 module.exports = new HistoricalEventStore();

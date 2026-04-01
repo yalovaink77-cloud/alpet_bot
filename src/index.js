@@ -61,7 +61,7 @@ async function processItem(item) {
   });
 
   const matches = await historicalEventMatcher.findMatches(normalizedEvent);
-  const reactionStats = marketReactionAnalyzer.buildReactionStats(normalizedEvent, matches);
+  const reactionStats = await marketReactionAnalyzer.buildReactionStats(normalizedEvent, matches);
 
   for (const match of matches) {
     await supabaseClient.saveHistoricalMatch({

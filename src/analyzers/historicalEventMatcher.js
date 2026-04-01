@@ -65,7 +65,39 @@ async function findMatches(event, limit = 10) {
     .slice(0, limit);
 }
 
+/**
+ * Returns reaction_stats for the given event + instrument by looking up
+ * historical outcome data.  Falls back to a safe default when there is
+ * insufficient data so scoreEvent() keeps working unchanged.
+ *
+ * Shape (matches what confidenceCalibrator.scoreEvent() expects):
+ *   { instrument, consistencyScore, samples?, hitRate?, avgMove? }
+ */
+async function buildReactionStats(event, instrument) {
+  const stats = await historicalEventStore.getOutcomeStats({
+    eventType: event.eventType,
+    instrument,
+    horizon: '1h',
+    minSamples: 3,
+  });
+
+  if (!stats) {
+    // No sufficient data yet — zero consistency triggers low_history_penalty
+    // inside confidenceCalibrator (correct behaviour while data accumulates).
+    return { instrument, consistencyScore: 0 };
+  }
+
+  return {
+    instrument,
+    consistencyScore: stats.consistencyScore,
+    samples:          stats.samples,
+    hitRate:          stats.hitRate,
+    avgMove:          stats.avgMove,
+  };
+}
+
 module.exports = {
   findMatches,
-  computeSimilarity
+  computeSimilarity,
+  buildReactionStats,
 };
