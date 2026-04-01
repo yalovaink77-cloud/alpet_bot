@@ -59,7 +59,7 @@ function chooseDecision(finalScore) {
 
 function buildSignals(event, reactionStats, matches) {
   return reactionStats.map((stats) => {
-    const scoring = scoreEvent(event, stats, matches.length);
+    const scoring = scoreEvent(event, matches.length, stats);
     const decision = chooseDecision(scoring.finalScore);
     const chosenDirection = chooseDirection(event, stats.instrument);
     const direction = decision === 'IGNORE' ? 'NONE' : chosenDirection === 'WATCH' ? 'WATCH' : chosenDirection;

@@ -190,6 +190,7 @@ async function runCycle() {
     }
 
     const items = await collectNews();
+    deduplicator.seen.clear();
     const freshItems = deduplicator.filter(items);
 
     for (const item of freshItems) {

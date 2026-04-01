@@ -27,7 +27,7 @@ function scoreEvent(event, matchCount, stats) {
     singleSourcePenalty: false,
     thematicOnlyPenalty: event.directnessToTurkey === 'thematic',
     lowHistoryPenalty: matchCount < (event.directnessToTurkey === 'direct' ? 3 : event.directnessToTurkey === 'indirect' ? 5 : 8),
-    contradictoryHistoryPenalty: (stats.consistencyScore || 0) < 0.45,
+    contradictoryHistoryPenalty: matchCount >= 3 && (stats.consistencyScore || 0) < 0.45,
     executionRiskPenalty: false,
     portfolioCrowdingPenalty: false
   };
