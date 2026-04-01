@@ -20,6 +20,7 @@ const riskGuard = require('./risk/riskGuard');
 const orderManager = require('./execution/orderManager');
 const telegram = require('./utils/telegramNotifier');
 const paperPortfolio = require('./utils/paperPortfolio');
+const { volatilityPositionSizer } = require('./risk/volatilityPositionSizer');
 
 let isRunning = false;
 
@@ -120,10 +121,18 @@ async function processItem(item) {
     });
 
     if (riskAdjustedSignal.decision === 'EXECUTE') {
-      // Paper trade aç
-      const paperResult = await paperPortfolio.openPosition(riskAdjustedSignal);
       const account = await paperPortfolio.getAccountSummary();
-      telegram.notifySignal(riskAdjustedSignal, normalizedEvent, paperResult, account);
+      const capital = (account && account.balance) || 40;
+      const volSizing = await volatilityPositionSizer(riskAdjustedSignal.instrument, capital);
+      const sizedSignal = {
+        ...riskAdjustedSignal,
+        positionSize: volSizing.positionSize,
+        leverage: volSizing.leverage,
+        volTargetMeta: volSizing,
+      };
+      const paperResult = await paperPortfolio.openPosition(sizedSignal);
+      const updatedAccount = await paperPortfolio.getAccountSummary();
+      telegram.notifySignal(sizedSignal, normalizedEvent, paperResult, updatedAccount);
     }
 
     if (riskAdjustedSignal.decision === 'EXECUTE' && riskAdjustedSignal.risk.allClear) {

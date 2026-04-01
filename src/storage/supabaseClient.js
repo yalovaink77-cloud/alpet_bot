@@ -276,6 +276,33 @@ class SupabaseClient {
 
     return data;
   }
+
+  async getPriceHistory(instrument, days = 21) {
+    if (!this.enabled) return [];
+    const { data, error } = await this.client
+      .from('price_history')
+      .select('close_price')
+      .eq('instrument', instrument)
+      .order('price_date', { ascending: true })
+      .limit(days);
+    if (error) throw error;
+    return (data || []).map(r => Number(r.close_price));
+  }
+
+  async saveVolatilityLog(record) {
+    return this.insert('volatility_log', {
+      instrument:        record.instrument,
+      logged_at:         new Date().toISOString(),
+      daily_vol:         record.daily_vol,
+      annual_vol:        record.annual_vol,
+      target_vol:        record.target_vol,
+      leverage:          record.leverage,
+      capital:           record.capital,
+      position_size:     record.position_size,
+      no_trade_band_hit: record.no_trade_band_hit || false,
+      metadata:          record.metadata || {},
+    });
+  }
 }
 
 module.exports = new SupabaseClient();
