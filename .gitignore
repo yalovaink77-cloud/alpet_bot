@@ -4,4 +4,8 @@ node_modules/
 npm-debug.log*
 coverage/
 dist/
+
+# Local Supabase query snippets (not part of the codebase)
+*.csv
+Supabase Snippet*.csv
 logs/
