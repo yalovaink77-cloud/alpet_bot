@@ -6,7 +6,7 @@
 
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
-const { getPrice } = require('./priceOracle');
+const { getPrice, getRecentCloses } = require('./priceOracle');
 const logger = require('./logger');
 
 const sb = createClient(
@@ -16,10 +16,16 @@ const sb = createClient(
 
 // Her işlemde bakiyenin max %10'unu riske at
 const POSITION_SIZE_PCT = 0.10;
-// Stop-loss: giriş fiyatından %2 ters giderse kapat
-const STOP_LOSS_PCT = 0.02;
-// Take-profit: giriş fiyatından %3 kâra gelince kapat
-const TAKE_PROFIT_PCT = 0.03;
+// Stop-loss: giriş fiyatından %1.5 ters giderse kapat (R/R = 1:3)
+const STOP_LOSS_PCT = 0.015;
+// Take-profit: giriş fiyatından %4.5 kâra gelince kapat (R/R = 1:3)
+const TAKE_PROFIT_PCT = 0.045;
+// Breakeven stop: pozisyon bu kâra ulaşırsa stop entry'ye çekilir
+const BREAKEVEN_TRIGGER_PCT = 0.01;
+// Gece saatlerinde (UTC 20:00–06:00) volatil enstrümanlara yeni giriş yapma
+const OVERNIGHT_RESTRICTED = ['BRENT', 'XAUUSD'];
+// Trend filtresi: son 3 günün ortalamasına göre ters yönde giriş yapma
+const TREND_FILTER_DAYS = 3;
 
 async function getAccount() {
   const { data, error } = await sb
@@ -53,10 +59,53 @@ async function openPosition(signal) {
     return null;
   }
 
+  // Aynı enstrümanda son MAX_CONSECUTIVE_LOSSES işlem arka arkaya stop-loss mu?
+  const { data: recentClosed } = await sb
+    .from('paper_positions')
+    .select('close_reason')
+    .eq('instrument', signal.instrument)
+    .eq('status', 'closed')
+    .order('closed_at', { ascending: false })
+    .limit(MAX_CONSECUTIVE_LOSSES);
+
+  if (recentClosed && recentClosed.length === MAX_CONSECUTIVE_LOSSES &&
+      recentClosed.every(p => p.close_reason === 'STOP_LOSS')) {
+    logger.warn(`paperPortfolio: ${signal.instrument} son ${MAX_CONSECUTIVE_LOSSES} işlem arka arkaya stop-loss, giriş engellendi`);
+    return null;
+  }
+
   const entryPrice = await getPrice(signal.instrument);
   if (!entryPrice) {
     logger.warn(`paperPortfolio: ${signal.instrument} fiyat alınamadı, pozisyon açılamıyor`);
     return null;
+  }
+
+  // Gece saati filtresi: kısıtlı enstrümanlarda UTC 20:00–06:00 arası giriş yapma
+  if (OVERNIGHT_RESTRICTED.includes(signal.instrument)) {
+    const utcHour = new Date().getUTCHours();
+    if (utcHour >= 20 || utcHour < 6) {
+      logger.warn(`paperPortfolio: ${signal.instrument} gece saati (UTC ${utcHour}:xx), yeni giriş engellendi`);
+      return null;
+    }
+  }
+
+  // Trend filtresi: son gün kapanışlarına bakarak ters yönde giriş yapma
+  if (signal.direction === 'LONG' || signal.direction === 'SHORT') {
+    const closes = await getRecentCloses(signal.instrument, TREND_FILTER_DAYS + 1);
+    if (closes && closes.length >= 2) {
+      const oldest = closes[0];
+      const newest = closes[closes.length - 1];
+      const trendPct = (newest - oldest) / oldest;
+      // Trend güçlüyse (>%2) ve yöne karşıysa girme
+      if (signal.direction === 'LONG' && trendPct < -0.02) {
+        logger.warn(`paperPortfolio: ${signal.instrument} ${TREND_FILTER_DAYS}g trend -%${Math.abs(trendPct*100).toFixed(1)}, LONG giriş engellendi`);
+        return null;
+      }
+      if (signal.direction === 'SHORT' && trendPct > 0.02) {
+        logger.warn(`paperPortfolio: ${signal.instrument} ${TREND_FILTER_DAYS}g trend +%${(trendPct*100).toFixed(1)}, SHORT giriş engellendi`);
+        return null;
+      }
+    }
   }
 
   const positionUsd = Math.min(
@@ -118,9 +167,22 @@ async function checkAndClosePositions() {
     const pnlPct = pos.direction === 'LONG' ? pricePct : -pricePct;
     const pnlUsd = parseFloat((pos.position_usd * pnlPct).toFixed(2));
 
+    // Breakeven stop: kâr BREAKEVEN_TRIGGER_PCT'ye ulaştıysa ve şimdi sıfırın altındaysa kapat
+    const hasTriggeredBreakeven = pos.breakeven_triggered || pnlPct >= BREAKEVEN_TRIGGER_PCT;
+    if (hasTriggeredBreakeven && !pos.breakeven_triggered) {
+      await sb.from('paper_positions').update({ breakeven_triggered: true }).eq('id', pos.id);
+    }
+
     let closeReason = null;
-    if (pnlPct <= -STOP_LOSS_PCT) closeReason = 'STOP_LOSS';
+    if (hasTriggeredBreakeven && pnlPct <= 0) closeReason = 'BREAKEVEN_STOP';
+    else if (pnlPct <= -STOP_LOSS_PCT) closeReason = 'STOP_LOSS';
     else if (pnlPct >= TAKE_PROFIT_PCT) closeReason = 'TAKE_PROFIT';
+    else {
+      // 48 saat zaman aşımı kontrolü
+      const openedAt = new Date(pos.opened_at);
+      const hoursOpen = (Date.now() - openedAt.getTime()) / (1000 * 60 * 60);
+      if (hoursOpen >= MAX_OPEN_HOURS) closeReason = 'TIMEOUT';
+    }
 
     if (closeReason) {
       await sb.from('paper_positions').update({

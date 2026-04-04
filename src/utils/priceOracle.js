@@ -22,6 +22,41 @@ const YAHOO_SYMBOLS = {
   'KOZAL':   'KOZAL.IS',
 };
 
+function fetchPriceData(symbol, range, interval) {
+  return new Promise((resolve) => {
+    const yahooSym = YAHOO_SYMBOLS[symbol] || symbol;
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSym}?interval=${interval}&range=${range}`;
+
+    const req = https.get(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    }, (res) => {
+      let data = '';
+      res.on('data', chunk => { data += chunk; });
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)); }
+        catch { resolve(null); }
+      });
+    });
+    req.on('error', () => resolve(null));
+    req.setTimeout(5000, () => { req.destroy(); resolve(null); });
+  });
+}
+
+/**
+ * Son N günlük kapanış fiyatlarını döner (en eskiden en yeniye).
+ * Trend tespiti için kullanılır.
+ */
+async function getRecentCloses(instrument, days = 5) {
+  try {
+    const json = await fetchPriceData(instrument, `${days}d`, '1d');
+    const closes = json?.chart?.result?.[0]?.indicators?.quote?.[0]?.close;
+    if (!closes) return null;
+    return closes.filter(c => c != null);
+  } catch {
+    return null;
+  }
+}
+
 function fetchPrice(symbol) {
   return new Promise((resolve) => {
     const yahooSym = YAHOO_SYMBOLS[symbol] || symbol;
@@ -60,4 +95,4 @@ async function getPrice(instrument) {
   }
 }
 
-module.exports = { getPrice };
+module.exports = { getPrice, getRecentCloses };
