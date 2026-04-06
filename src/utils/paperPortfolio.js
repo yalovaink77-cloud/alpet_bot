@@ -26,6 +26,10 @@ const BREAKEVEN_TRIGGER_PCT = 0.01;
 const OVERNIGHT_RESTRICTED = ['BRENT', 'XAUUSD'];
 // Trend filtresi: son 3 günün ortalamasına göre ters yönde giriş yapma
 const TREND_FILTER_DAYS = 3;
+// Pozisyon zaman aşımı: açık kalabilecek maksimum saat
+const MAX_OPEN_HOURS = 48;
+// Arka arkaya bu kadar stop-loss gelirse o enstrümana yeni giriş yapma
+const MAX_CONSECUTIVE_LOSSES = 3;
 
 async function getAccount() {
   const { data, error } = await sb
