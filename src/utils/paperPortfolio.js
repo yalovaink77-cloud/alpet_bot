@@ -31,6 +31,55 @@ const MAX_OPEN_HOURS = 48;
 // Arka arkaya bu kadar stop-loss gelirse o enstrümana yeni giriş yapma
 const MAX_CONSECUTIVE_LOSSES = 3;
 
+// ── Performance gating (kazanç optimizasyonu) ─────────────────────────────────
+// Yeterli örneklem oluşunca (min trade) negatif performanslı enstrümanlarda
+// yeni girişleri otomatik kıs.
+const PAPER_GATING_ENABLED = process.env.PAPER_GATING_ENABLED !== 'false';
+const PAPER_GATING_MIN_TRADES = Number(process.env.PAPER_GATING_MIN_TRADES) || 20;
+const PAPER_GATING_MIN_WINRATE = Number(process.env.PAPER_GATING_MIN_WINRATE) || 0.40; // 0–1
+const PERF_CACHE_MS = Number(process.env.PAPER_PERF_CACHE_MS) || 5 * 60 * 1000;
+let perfCache = { at: 0, byInstrument: {} };
+
+async function getClosedPerformanceByInstrument() {
+  const now = Date.now();
+  if (perfCache.at && now - perfCache.at < PERF_CACHE_MS) return perfCache.byInstrument;
+
+  const { data, error } = await sb
+    .from('paper_positions')
+    .select('instrument,pnl_usd,status')
+    .eq('status', 'closed')
+    .limit(5000);
+
+  if (error) {
+    logger.warn('paperPortfolio: performans geçmişi okunamadı', { error: error.message });
+    return perfCache.byInstrument || {};
+  }
+
+  const by = {};
+  for (const row of data || []) {
+    const inst = row.instrument;
+    const pnl = Number(row.pnl_usd || 0);
+    if (!by[inst]) by[inst] = { trades: 0, wins: 0, pnlSum: 0 };
+    by[inst].trades += 1;
+    if (pnl > 0) by[inst].wins += 1;
+    by[inst].pnlSum += pnl;
+  }
+
+  // finalize
+  Object.keys(by).forEach((k) => {
+    const s = by[k];
+    const winRate = s.trades ? s.wins / s.trades : 0;
+    by[k] = {
+      ...s,
+      winRate: Number(winRate.toFixed(4)),
+      avgPnl: Number((s.pnlSum / Math.max(1, s.trades)).toFixed(4)),
+    };
+  });
+
+  perfCache = { at: now, byInstrument: by };
+  return by;
+}
+
 async function getAccount() {
   const { data, error } = await sb
     .from('paper_account')
@@ -48,6 +97,21 @@ async function openPosition(signal) {
   if (account.balance_usd < 2) {
     logger.warn('paperPortfolio: yetersiz bakiye', { balance: account.balance_usd });
     return null;
+  }
+
+  // Performans kapısı: yeterli trade varsa ve performans kötüyse yeni giriş engelle
+  if (PAPER_GATING_ENABLED) {
+    const perf = await getClosedPerformanceByInstrument();
+    const s = perf[signal.instrument];
+    if (s && s.trades >= PAPER_GATING_MIN_TRADES) {
+      const bad = s.pnlSum < 0 && s.winRate < PAPER_GATING_MIN_WINRATE;
+      if (bad) {
+        logger.warn(
+          `paperPortfolio: ${signal.instrument} geçmiş performansı zayıf (trades=${s.trades} winRate=${Math.round(s.winRate * 100)}% pnl=$${s.pnlSum.toFixed(2)}), giriş engellendi`
+        );
+        return null;
+      }
+    }
   }
 
   // Aynı enstrümanda açık pozisyon var mı?
@@ -227,4 +291,29 @@ async function getAccountSummary() {
   return { ...account, winRate };
 }
 
-module.exports = { openPosition, checkAndClosePositions, getAccountSummary };
+async function listOpenPositions() {
+  const { data, error } = await sb
+    .from('paper_positions')
+    .select('instrument,direction,position_usd,opened_at')
+    .eq('status', 'open');
+
+  if (error) {
+    logger.warn('paperPortfolio: açık pozisyonlar okunamadı', { error: error.message });
+    return [];
+  }
+
+  return (data || []).map(p => ({
+    instrument: p.instrument,
+    direction: p.direction,
+    positionUsd: Number(p.position_usd || 0),
+    openedAt: p.opened_at,
+  }));
+}
+
+module.exports = {
+  openPosition,
+  checkAndClosePositions,
+  getAccountSummary,
+  listOpenPositions,
+  getClosedPerformanceByInstrument,
+};

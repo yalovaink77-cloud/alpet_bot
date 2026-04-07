@@ -23,6 +23,7 @@
 
 const supabaseClient = require('../storage/supabaseClient');
 const logger         = require('../utils/logger');
+const { getRecentCloses } = require('../utils/priceOracle');
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const TARGET_VOL     = Number(process.env.TARGET_VOL)     || 0.15;
@@ -89,7 +90,15 @@ function toLogReturns(prices) {
  */
 async function volatilityPositionSizer(instrument, capital, prevLeverage = null) {
   // ── 1. Fetch price history ──────────────────────────────────────────────────
-  const prices = await supabaseClient.getPriceHistory(instrument, LOOKBACK_DAYS + 1);
+  let prices = await supabaseClient.getPriceHistory(instrument, LOOKBACK_DAYS + 1);
+
+  // Supabase'te fiyat geçmişi yoksa Yahoo (priceOracle) üzerinden fallback dene.
+  if (!prices || prices.length < 5) {
+    const oracleCloses = await getRecentCloses(instrument, LOOKBACK_DAYS + 1);
+    if (oracleCloses && oracleCloses.length >= 5) {
+      prices = oracleCloses.map(Number).filter(n => Number.isFinite(n));
+    }
+  }
 
   if (prices.length < 5) {
     // Not enough history — use minimum allocation as safe fallback

@@ -37,7 +37,14 @@ function normalize(item) {
     executionBias: classification.executionBias,
     metadata: {
       reliabilityScore: item.reliabilityScore || 0,
-      url: item.url || ''
+      url: item.url || '',
+
+      // NEWS_FEEDER_BOT pass-through (if available)
+      sourceTier: item.sourceTier || null,
+      confidenceScore: item.confidenceScore ?? null,
+      importanceScore: item.importanceScore ?? null,
+      signalDirection: item.signalDirection || null,
+      rawData: item.rawData ?? null,
     }
   };
 
