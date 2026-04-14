@@ -17,17 +17,17 @@ const sb = createClient(
 // Her işlemde bakiyenin max %10'unu riske at
 const POSITION_SIZE_PCT = 0.10;
 // Stop-loss: giriş fiyatından %1.5 ters giderse kapat (R/R = 1:3)
-const STOP_LOSS_PCT = 0.015;
+const STOP_LOSS_PCT = 0.025;  // FIX: 1.5% → 2.5% (pazartesi volatilitesi)
 // Take-profit: giriş fiyatından %4.5 kâra gelince kapat (R/R = 1:3)
-const TAKE_PROFIT_PCT = 0.045;
+const TAKE_PROFIT_PCT = 0.06;  // FIX: 4.5% → 6% (daha makul R/R)
 // Breakeven stop: pozisyon bu kâra ulaşırsa stop entry'ye çekilir
 const BREAKEVEN_TRIGGER_PCT = 0.01;
 // Gece saatlerinde (UTC 20:00–06:00) volatil enstrümanlara yeni giriş yapma
-const OVERNIGHT_RESTRICTED = ['BRENT', 'XAUUSD'];
+const OVERNIGHT_RESTRICTED = ['BRENT', 'XAUUSD', 'VIOP30', 'GARAN', 'AKBNK'];  // FIX: gece volatil hisse ekle
 // Trend filtresi: son 3 günün ortalamasına göre ters yönde giriş yapma
 const TREND_FILTER_DAYS = 3;
 // Pozisyon zaman aşımı: açık kalabilecek maksimum saat
-const MAX_OPEN_HOURS = 48;
+const MAX_OPEN_HOURS = 12;  // FIX: 48h → 12h (hafta sonu gap)
 // Arka arkaya bu kadar stop-loss gelirse o enstrümana yeni giriş yapma
 const MAX_CONSECUTIVE_LOSSES = 3;
 
