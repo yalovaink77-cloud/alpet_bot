@@ -1,14 +1,35 @@
+'use strict';
+
 function classifySeverity(text) {
   const lower = text.toLowerCase();
-  if (/(war|attack|strike|sanction|emergency|crash)/.test(lower)) {
+
+  if (/(war|attack|strike|crash|collapse|emergency|iflas|kriz|crisis|devaluation|kur krizi|default|sovereign)/.test(lower)) {
+    return 'extreme';
+  }
+
+  if (/(rate hike|faiz artış|enflasyon yüksel|inflation surge|recession|durgunluk|fed hike|ecb hike|tcmb|merkez bankası|rate cut|faiz indi|devalüasyon|sanctions|yaptırım|embargo)/.test(lower)) {
     return 'high';
   }
 
-  if (/(rate|inflation|oil|gold|hack|upgrade|downgrade)/.test(lower)) {
+  if (/(rate|inflation|enflasyon|oil|gold|altin|petrol|hack|upgrade|downgrade|fed|ecb|gdp|büyüme|ihracat|trade deficit|cari açık|bütçe açığı|interest|faiz)/.test(lower)) {
     return 'medium';
   }
 
   return 'low';
+}
+
+function classifyNovelty(item) {
+  const text = `${item.title || ''} ${item.summary || ''}`.toLowerCase();
+
+  if (/(breaking|son dakika|flash|urgent|acil|ilk kez|first time|unexpected|sürpriz|surprise)/.test(text)) {
+    return 'new_information';
+  }
+
+  if (/(update|güncel|revise|revizyon|revised|değişti|changed|yeni açıklama)/.test(text)) {
+    return 'developing_story';
+  }
+
+  return 'known_risk';
 }
 
 function hasMatch(pattern, text) {
@@ -16,13 +37,29 @@ function hasMatch(pattern, text) {
 }
 
 function classifyEvent(item) {
-  const text = `${item.title} ${item.summary}`.toLowerCase();
-  const geopoliticsPattern = /\b(iran|israel|usa|abd|missile|attack|ceasefire|sanction|war)\b/;
-  const macroPattern = /\b(tcmb|merkez bankasi|faiz|interest rate|inflation|cpi|fed|ecb)\b/;
-  const commodityPattern = /\b(oil|brent|petrol|gold|altin|natural gas|gas|lng)\b/;
+  const text = `${item.title} ${item.summary || ''}`.toLowerCase();
+
+  const geopoliticsPattern = /\b(iran|israel|usa|abd|missile|attack|ceasefire|sanction|war|ukraine|rusya|russia|nato|çatışma|conflict|kriz)\b/;
+  const macroPattern = /\b(tcmb|merkez bankasi|faiz|interest rate|inflation|enflasyon|cpi|fed|ecb|rate hike|rate cut|monetary|para politikası)\b/;
+  const commodityPattern = /\b(oil|brent|petrol|gold|altin|natural gas|doğalgaz|gas|lng|opec|ham petrol)\b/;
   const cryptoPattern = /\b(btc|bitcoin|eth|ethereum|crypto|stablecoin|blockchain|kripto|etf)\b/;
-  const kapPattern = /\b(kap|geri alim|buyback|insider|ortak satis|sozlesme|ihale)\b/;
+  const kapPattern = /\b(kap|geri alim|buyback|insider|ortak satis|sozlesme|ihale|temettü|dividend|kâr açıklama|earnings)\b/;
   const technologyPattern = /\b(yapay zeka|artificial intelligence|ai|chip|chips|semiconductor|cyber|cloud|electric vehicle|ev|5g)\b/;
+  const turkeyMacroPattern = /\b(türkiye|turkey|bist|borsa istanbul|enflasyon|tüfe|üfe|tcmb|hazine|bütçe|cari açık|ihracat|ithalat)\b/;
+
+  if (hasMatch(turkeyMacroPattern, text) && hasMatch(macroPattern, text)) {
+    return {
+      eventClass: 'Turkey Macro',
+      eventType: 'turkey_macro_event',
+      region: 'Turkey',
+      channels: ['usdtry_move', 'bist_move', 'risk_repricing'],
+      assetTags: ['usdtry', 'bist30', 'banks'],
+      actorTags: ['central_bank', 'government'],
+      countryTags: ['Turkey'],
+      directnessToTurkey: 'direct',
+      executionBias: 'mixed'
+    };
+  }
 
   if (hasMatch(geopoliticsPattern, text)) {
     return {
@@ -126,8 +163,8 @@ function enrichClassification(item) {
   const classification = classifyEvent(item);
   return {
     ...classification,
-    severity: classifySeverity(`${item.title} ${item.summary}`),
-    novelty: 'new_information',
+    severity: classifySeverity(`${item.title} ${item.summary || ''}`),
+    novelty: classifyNovelty(item),
     credibility: item.credibility || 'medium'
   };
 }
