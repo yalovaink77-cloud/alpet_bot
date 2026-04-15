@@ -89,12 +89,8 @@ async function processItem(item) {
 
   const signals = decisionEngine.buildSignals(normalizedEvent, reactionStats, matches);
 
-  // Paper portfolio açık pozisyonlarını risk kontrollerine dahil et.
-  // (Live trading tarafı ayrıca broker pozisyonlarıyla zenginleştirilmeli.)
-  const openPositions = await paperPortfolio.listOpenPositions().catch(() => []);
-
   for (const signal of signals) {
-    const riskAdjustedSignal = riskGuard.applyToSignal(signal, { openPositions });
+    const riskAdjustedSignal = riskGuard.applyToSignal(signal, { openPositions: [] });
     const penaltyFlags = riskAdjustedSignal.scoreBreakdown.penaltyFlags;
 
     const storedSignal = await supabaseClient.saveSignal({

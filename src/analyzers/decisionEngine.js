@@ -2,8 +2,6 @@ const { scoreEvent } = require('./confidenceCalibrator');
 const { validateSignal } = require('../utils/schemaValidator');
 const { APP_CONFIG } = require('../../config/app');
 
-const FEEDER_TRADE_GATE_ENABLED = process.env.ENABLE_FEEDER_TRADE_GATE === 'true';
-
 function chooseDirection(event, instrument) {
   // Extraction pipeline'dan gelen eventType, actors, stage, context ile senaryo tabanlı yön
   const ch = event.channels || [];
@@ -44,17 +42,6 @@ function chooseDirection(event, instrument) {
   // Risk-off / piyasa düşüşü
   if ((ch.includes('risk_off') || ch.includes('risk_repricing')) && instrument === 'VIOP30') return 'SHORT';
   if ((ch.includes('risk_off') || ch.includes('risk_repricing')) && ['GARAN', 'AKBNK'].includes(instrument)) return 'SHORT';
-
-  // NEWS_FEEDER_BOT signal_direction kullanımı (BIST/VIOP için güvenli sınırlı kullanım):
-  // bullish → BIST/VIOP LONG, bearish → BIST/VIOP SHORT
-  if (FEEDER_TRADE_GATE_ENABLED) {
-    const sd = String(event?.metadata?.signalDirection || '').toLowerCase();
-    const isBistOrViop = ['VIOP30', 'THYAO', 'PGSUS', 'TUPRS', 'KOZAL', 'GARAN', 'AKBNK'].includes(instrument);
-    if (isBistOrViop && (sd === 'bullish' || sd === 'bearish')) {
-      return sd === 'bullish' ? 'LONG' : 'SHORT';
-    }
-  }
-
   return 'WATCH';
 }
 
@@ -76,27 +63,7 @@ function buildSignals(event, reactionStats, matches) {
     const decision = chooseDecision(scoring.finalScore);
     const chosenDirection = chooseDirection(event, stats.instrument);
     const direction = decision === 'IGNORE' ? 'NONE' : chosenDirection === 'WATCH' ? 'WATCH' : chosenDirection;
-    let normalizedDecision = direction === 'WATCH' && decision === 'EXECUTE' ? 'WATCH' : decision;
-
-    // Trade gate: BIST/VIOP'ta düşük güven/önem/tier durumlarında EXECUTE'i WATCH'a indir.
-    if (FEEDER_TRADE_GATE_ENABLED) {
-      const isBistOrViop = ['VIOP30', 'THYAO', 'PGSUS', 'TUPRS', 'KOZAL', 'GARAN', 'AKBNK'].includes(stats.instrument);
-      const tier = String(event?.metadata?.sourceTier || '').toLowerCase();
-      const conf = Number(event?.metadata?.confidenceScore);
-      const imp  = Number(event?.metadata?.importanceScore);
-      const sd   = String(event?.metadata?.signalDirection || '').toLowerCase();
-
-      if (normalizedDecision === 'EXECUTE' && isBistOrViop) {
-        const tierOk = tier === 'tier_1' || tier === 'tier_2' || tier === '';
-        const confOk = !Number.isFinite(conf) || conf >= 0.45;
-        const impOk  = !Number.isFinite(imp)  || imp >= 0.40;
-        const dirOk  = sd === '' || sd === 'bullish' || sd === 'bearish';
-
-        if (!tierOk || !confOk || !impOk || !dirOk) {
-          normalizedDecision = 'WATCH';
-        }
-      }
-    }
+    const normalizedDecision = direction === 'WATCH' && decision === 'EXECUTE' ? 'WATCH' : decision;
     const tradeConfidence = Number(Math.min(Math.max(scoring.finalScore / 100, 0), 1).toFixed(4));
 
     return validateSignal({
